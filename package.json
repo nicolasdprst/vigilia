@@ -1,0 +1,36 @@
+{
+  "name": "vigilia-prototype",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "bash scripts/start-vigilia.sh",
+    "dev": "vite --force",
+    "server": ".venv/bin/uvicorn server.app:app --reload --host 127.0.0.1 --port 8000",
+    "setup:local-ai": "bash scripts/setup-local-ai.sh",
+    "ingest": ".venv/bin/python -m server.ingest",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:backend": ".venv/bin/python -m unittest discover -s server -p 'test_*.py'"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "framer-motion": "^12.23.24",
+    "lucide-react": "^0.552.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.5",
+    "tailwindcss": "^4.1.14"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "jsdom": "^27.1.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.1",
+    "vitest": "^4.0.6"
+  }
+}
