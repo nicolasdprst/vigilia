@@ -19,7 +19,7 @@ export function LibraryPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [importOpen, setImportOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
-  const allDocs = [...importedDocuments, ...documents]
+  const allDocs = useMemo(() => [...importedDocuments, ...documents], [importedDocuments])
   const currentFolder = allFolders.find((folder) => folder.id === folderId)
   const visible = useMemo(() => allDocs.filter((doc) => (!folderId || doc.folderId === folderId) && (type === 'Tous les types' || doc.type === type) && doc.title.toLowerCase().includes(search.toLowerCase())).sort((a, b) => sort === 'Nom A–Z' ? a.title.localeCompare(b.title) : b.createdAt.localeCompare(a.createdAt)), [allDocs, folderId, search, type, sort])
   const toggle = (id: string) => setSelected((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id])
@@ -43,8 +43,18 @@ function DocumentTable({ docs, selected, toggle, open }: { docs: LegalDocument[]
 function DocumentCard({ doc, open }: { doc: LegalDocument; open: () => void }) { return <button className="document-card" onClick={open}><div className="document-preview"><FileText size={30} /><span>{doc.fileType}</span></div><strong>{doc.title}</strong><small>{doc.pages} pages · {doc.size}</small><span className="ready-status"><span /> Disponible pour l’IA</span></button> }
 
 function CreateFolderModal({ close, create }: { close: () => void; create: (client: string, name: string) => void }) {
-  const [client, setClient] = useState(''); const [name, setName] = useState('')
-  return <div className="modal-layer" onMouseDown={close}><motion.div className="import-modal create-folder-modal" initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .97 }} onMouseDown={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}><header><div><h2>Créer un dossier</h2><p>Il apparaîtra immédiatement dans « Dossiers clients ».</p></div><button className="icon-button" onClick={close}><X size={18} /></button></header><div className="folder-form"><label className="field-label">Client<input autoFocus value={client} onChange={(event) => setClient(event.target.value)} placeholder="Ex. Atelier Rivoli" /></label><label className="field-label">Nom de l’affaire<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex. Contentieux fournisseur" /></label></div><div className="modal-actions"><button className="button secondary" onClick={close}>Annuler</button><button className="button primary" disabled={!client.trim() || !name.trim()} onClick={() => create(client.trim(), name.trim())}>Créer et ouvrir</button></div></motion.div></div>
+  const [client, setClient] = useState('')
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [close])
+
+  return <div className="modal-layer" onMouseDown={close}><motion.div className="import-modal create-folder-modal" role="dialog" aria-modal="true" initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .97 }} onMouseDown={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}><header><div><h2>Créer un dossier</h2><p>Il apparaîtra immédiatement dans « Dossiers clients ».</p></div><button className="icon-button" onClick={close} aria-label="Fermer"><X size={18} /></button></header><div className="folder-form"><label className="field-label">Client<input autoFocus value={client} onChange={(event) => setClient(event.target.value)} placeholder="Ex. Atelier Rivoli" /></label><label className="field-label">Nom de l’affaire<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex. Contentieux fournisseur" /></label></div><div className="modal-actions"><button className="button secondary" onClick={close}>Annuler</button><button className="button primary" disabled={!client.trim() || !name.trim()} onClick={() => create(client.trim(), name.trim())}>Créer et ouvrir</button></div></motion.div></div>
 }
 
 function ImportModal({ close, initialFolderId }: { close: () => void; initialFolderId: string }) {
@@ -59,8 +69,22 @@ function ImportModal({ close, initialFolderId }: { close: () => void; initialFol
   const { status } = useLocalStatus()
   const local = Boolean(status?.localOnly)
   const steps = ['Téléversement', 'Extraction du texte', 'Indexation', 'Disponible pour l’IA']
+  const MAX_FILE_SIZE = 50 * 1024 * 1024
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step < 0) close()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [close, step])
+
   const start = async () => {
     if (!file) return
+    if (file.size > MAX_FILE_SIZE) {
+      setError('Le fichier dépasse la taille limite autorisée de 50 Mo.')
+      return
+    }
     setError(null); setStep(0)
     try {
       setStep(1)
@@ -70,7 +94,18 @@ function ImportModal({ close, initialFolderId }: { close: () => void; initialFol
       notify(`${result.chunks} extraits prêts à être interrogés — stockage local`)
     } catch (cause) { setStep(-1); setError(cause instanceof Error ? cause.message : "Échec de l'import") }
   }
-  const pickFile = (files: FileList | null) => { const next = files?.[0]; if (next) { setFile(next); setError(null) } }
+  const pickFile = (files: FileList | null) => {
+    const next = files?.[0]
+    if (next) {
+      if (next.size > MAX_FILE_SIZE) {
+        setError('Le fichier dépasse la taille limite autorisée de 50 Mo.')
+        setFile(null)
+        return
+      }
+      setFile(next)
+      setError(null)
+    }
+  }
   return <div className="modal-layer" onMouseDown={step === 3 ? close : undefined}>
     <motion.div className="import-modal" initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .97 }} onMouseDown={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}>
       <header><div><h2>Ajouter un document au dossier</h2><p>Vous saurez précisément quand il pourra être interrogé par l’IA.</p></div><button className="icon-button" onClick={close} aria-label="Fermer"><X size={18} /></button></header>

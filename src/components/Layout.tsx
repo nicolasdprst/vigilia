@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Archive, BookOpenCheck, Bot, ChevronLeft, CircleUserRound, Command, Database, Home, Menu, PanelLeftClose, Search, Server, Settings, ShieldCheck, Sparkles, X } from 'lucide-react'
-import { useState, type MouseEvent } from 'react'
+import { Archive, BookOpenCheck, Bot, ChevronLeft, CircleUserRound, Command, Database, Home, Menu, Search, Server, Settings, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../store/AppContext'
 import { useLocalStatus } from '../hooks/useLocalStatus'
@@ -19,6 +19,17 @@ export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { status, loading } = useLocalStatus()
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const sidebar = (
     <aside className="sidebar">
@@ -53,14 +64,24 @@ export function Layout() {
 
 function CommandPalette({ close, navigate }: { close: () => void; navigate: ReturnType<typeof useNavigate> }) {
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [close])
+
   const actions = [
     { label: 'Ouvrir la bibliothèque', detail: 'Documents et dossiers', icon: Database, path: '/library' },
     { label: 'Rechercher dans la législation', detail: 'Recherche confidentielle · sources citées', icon: Bot, path: '/assistant?folder=legislation' },
     { label: 'Interroger le dossier Delmas', detail: 'Assistant documentaire', icon: Bot, path: '/assistant?folder=delmas' },
     { label: 'Voir l’infrastructure locale', detail: 'Confidentialité', icon: Server, path: '/infrastructure' },
   ].filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
-  return <div className="modal-layer" onMouseDown={close}><motion.div className="command-palette" initial={{ opacity: 0, scale: .98, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .98 }} onMouseDown={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}>
-    <div className="command-input"><Search size={19} /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une action, un dossier, un document…" /><button onClick={close}><X size={17} /></button></div>
+
+  return <div className="modal-layer" onMouseDown={close}><motion.div className="command-palette" role="dialog" aria-modal="true" initial={{ opacity: 0, scale: .98, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .98 }} onMouseDown={(event: MouseEvent<HTMLDivElement>) => event.stopPropagation()}>
+    <div className="command-input"><Search size={19} /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une action, un dossier, un document…" /><button onClick={close} aria-label="Fermer"><X size={17} /></button></div>
     <div className="command-results"><p>Accès rapide</p>{actions.map(({ label, detail, icon: Icon, path }) => <button key={path} onClick={() => { navigate(path); close() }}><span className="command-icon"><Icon size={18} /></span><span><strong>{label}</strong><small>{detail}</small></span><span className="arrow">↗</span></button>)}</div>
   </motion.div></div>
 }

@@ -5,14 +5,18 @@
   "type": "module",
   "scripts": {
     "start": "bash scripts/start-vigilia.sh",
+    "start:win": "powershell -ExecutionPolicy Bypass -File scripts/start-vigilia.ps1",
     "dev": "vite --force",
     "server": ".venv/bin/uvicorn server.app:app --reload --host 127.0.0.1 --port 8000",
+    "server:win": ".venv\\Scripts\\uvicorn server.app:app --reload --host 127.0.0.1 --port 8000",
     "setup:local-ai": "bash scripts/setup-local-ai.sh",
     "ingest": ".venv/bin/python -m server.ingest",
+    "ingest:win": ".venv\\Scripts\\python -m server.ingest",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:backend": ".venv/bin/python -m unittest discover -s server -p 'test_*.py'"
+    "test:backend": ".venv/bin/python -m unittest discover -s server -p 'test_*.py'",
+    "test:backend:win": ".venv\\Scripts\\python -m unittest discover -s server -p \"test_*.py\""
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

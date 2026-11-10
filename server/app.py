@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 import uuid
 import zipfile
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -42,7 +42,15 @@ activity_lock = threading.Lock()
 active_requests = 0
 indexing_semaphore = threading.BoundedSemaphore(1)
 
-app = FastAPI(title="VIGILIA Local RAG", version="2.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    threading.Thread(target=backfill_missing_embeddings, daemon=True, name="vigilia-embedding-backfill").start()
+    yield
+
+
+app = FastAPI(title="VIGILIA Local RAG", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -131,12 +139,6 @@ def init_db() -> None:
                 db.execute(statement)
 
 
-@app.on_event("startup")
-def startup() -> None:
-    init_db()
-    threading.Thread(target=backfill_missing_embeddings, daemon=True, name="vigilia-embedding-backfill").start()
-
-
 def ollama(path: str, payload: dict[str, Any] | None = None, timeout: int = 120) -> dict[str, Any]:
     body = None if payload is None else json.dumps(payload).encode()
     request = urllib.request.Request(f"{OLLAMA_URL}{path}", data=body, headers={"Content-Type": "application/json"})
@@ -155,6 +157,11 @@ def ollama_ready() -> bool:
 def embed(text: str) -> list[float] | None:
     if not EMBED_MODEL:
         return None
+    try:
+        result = ollama("/api/embed", {"model": EMBED_MODEL, "input": text, "truncate": True, "keep_alive": "30m"}, timeout=45)
+        return result.get("embeddings", [None])[0]
+    except (OSError, urllib.error.URLError, TimeoutError, IndexError):
+        return None
 
 
 def backfill_missing_embeddings() -> None:
@@ -168,11 +175,6 @@ def backfill_missing_embeddings() -> None:
         if vector:
             with database() as db:
                 db.execute("UPDATE chunks SET embedding=? WHERE id=? AND embedding IS NULL", (json.dumps(vector), row["id"]))
-    try:
-        result = ollama("/api/embed", {"model": EMBED_MODEL, "input": text, "truncate": True, "keep_alive": "30m"}, timeout=45)
-        return result.get("embeddings", [None])[0]
-    except (OSError, urllib.error.URLError, TimeoutError, IndexError):
-        return None
 
 
 def extract_text(filename: str, raw: bytes) -> list[tuple[int, str]]:
@@ -347,7 +349,6 @@ def serialize_document(db: sqlite3.Connection, row: sqlite3.Row) -> dict[str, An
 
 @app.get("/api/health")
 def health():
-    init_db()
     with database() as db:
         documents = db.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         chunks = db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
@@ -369,10 +370,30 @@ def heartbeat(request: PresenceRequest):
 
 @app.get("/api/documents")
 def list_documents():
-    init_db()
     with database() as db:
         rows = db.execute("SELECT * FROM documents ORDER BY created_at DESC").fetchall()
-        return [serialize_document(db, row) for row in rows]
+        if not rows:
+            return []
+        chunks = db.execute("SELECT id, document_id, page, heading, content FROM chunks ORDER BY document_id, ordinal").fetchall()
+        chunks_by_doc: dict[str, list[dict[str, Any]]] = {}
+        for item in chunks:
+            chunks_by_doc.setdefault(item["document_id"], []).append({
+                "id": item["id"],
+                "page": item["page"],
+                "title": item["heading"] or f"Extrait page {item['page']}",
+                "text": item["content"],
+            })
+        return [
+            {
+                "id": row["id"], "folderId": row["folder_id"], "title": row["title"],
+                "filename": row["filename"], "pages": row["pages"], "createdAt": row["created_at"],
+                "sourceUrl": row["source_url"], "effectiveDate": row["effective_date"],
+                "sha256": row["sha256"], "mimeType": row["mime_type"], "sizeBytes": row["size_bytes"],
+                "version": row["version"], "hasOriginal": bool(row["stored_path"]),
+                "passages": chunks_by_doc.get(row["id"], []),
+            }
+            for row in rows
+        ]
 
 
 @app.get("/api/documents/{document_id}")

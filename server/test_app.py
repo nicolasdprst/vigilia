@@ -49,5 +49,37 @@ class RagSafetyTests(unittest.TestCase):
                 app.generate_answer("Question", chunks)
 
 
+    def test_embed_returns_none_when_no_model(self) -> None:
+        with patch.object(app, "EMBED_MODEL", ""):
+            self.assertIsNone(app.embed("texte juridique"))
+
+    def test_embed_calls_ollama_and_returns_vector(self) -> None:
+        fake_vector = [0.1, 0.2, 0.3]
+        with patch.object(app, "ollama", return_value={"embeddings": [fake_vector]}):
+            result = app.embed("texte juridique")
+            self.assertEqual(result, fake_vector)
+
+    def test_embed_handles_network_error(self) -> None:
+        import urllib.error
+        with patch.object(app, "ollama", side_effect=urllib.error.URLError("connexion refusée")):
+            self.assertIsNone(app.embed("texte juridique"))
+
+    def test_list_documents_batches_passages(self) -> None:
+        with app.database() as db:
+            db.execute(
+                "INSERT INTO documents(id,folder_id,title,filename,pages) VALUES(?,?,?,?,?)",
+                ("doc1", "legislation", "Code civil", "code.txt", 1),
+            )
+            db.execute(
+                "INSERT INTO chunks(id,document_id,folder_id,page,ordinal,heading,content) VALUES(?,?,?,?,?,?,?)",
+                ("c1", "doc1", "legislation", 1, 0, "Article 1218", "Force majeure"),
+            )
+        docs = app.list_documents()
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0]["id"], "doc1")
+        self.assertEqual(len(docs[0]["passages"]), 1)
+        self.assertEqual(docs[0]["passages"][0]["text"], "Force majeure")
+
+
 if __name__ == "__main__":
     unittest.main()

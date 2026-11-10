@@ -1,11 +1,16 @@
 import { ArrowRight, Bot, FileText, Folder, Search, ShieldCheck, Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { documents, folders, initialConversations } from '../data/demo'
+import { documents as demoDocuments } from '../data/demo'
+import { useApp } from '../store/AppContext'
 
 export function DashboardPage() {
   const [query, setQuery] = useState('')
   const navigate = useNavigate()
+  const { folders, importedDocuments, conversations } = useApp()
+
+  const allDocuments = useMemo(() => [...importedDocuments, ...demoDocuments], [importedDocuments])
+
   const launch = () => { if (query.trim()) navigate(`/assistant?folder=legislation&q=${encodeURIComponent(query)}`) }
   return <div className="dashboard page-inner">
     <section className="hero">
@@ -20,8 +25,8 @@ export function DashboardPage() {
     </section>
 
     <div className="dashboard-columns">
-      <section className="dashboard-section"><div className="section-heading compact"><div><h2>Documents consultés</h2></div><button onClick={() => navigate('/library')}>Bibliothèque <ArrowRight size={15} /></button></div><div className="activity-list">{documents.slice(0, 4).map((doc) => <button key={doc.id} onClick={() => navigate(`/documents/${doc.id}`)}><span className="doc-icon"><FileText size={18} /></span><span className="activity-main"><strong>{doc.title}</strong><small>{folders.find((f) => f.id === doc.folderId)?.client}</small></span><span className="activity-time">{doc.viewedAt}</span></button>)}</div></section>
-      <section className="dashboard-section"><div className="section-heading compact"><div><h2>Conversations récentes</h2></div><button onClick={() => navigate('/assistant')}>Assistant <ArrowRight size={15} /></button></div><div className="activity-list">{initialConversations.map((conversation, index) => <button key={conversation.id} onClick={() => navigate(`/assistant/${conversation.id}`)}><span className="bot-icon"><Bot size={18} /></span><span className="activity-main"><strong>{conversation.title}</strong><small>{folders.find((f) => f.id === conversation.folderId)?.client}</small></span><span className="activity-time">{index === 0 ? '09:46' : conversation.updatedAt.split(',')[0]}</span></button>)}</div><button className="new-conversation" onClick={() => navigate('/assistant')}><Sparkles size={17} /> Nouvelle conversation</button></section>
+      <section className="dashboard-section"><div className="section-heading compact"><div><h2>Documents consultés</h2></div><button onClick={() => navigate('/library')}>Bibliothèque <ArrowRight size={15} /></button></div><div className="activity-list">{allDocuments.slice(0, 4).map((doc) => <button key={doc.id} onClick={() => navigate(`/documents/${doc.id}`)}><span className="doc-icon"><FileText size={18} /></span><span className="activity-main"><strong>{doc.title}</strong><small>{folders.find((f) => f.id === doc.folderId)?.client}</small></span><span className="activity-time">{doc.viewedAt}</span></button>)}</div></section>
+      <section className="dashboard-section"><div className="section-heading compact"><div><h2>Conversations récentes</h2></div><button onClick={() => navigate('/assistant')}>Assistant <ArrowRight size={15} /></button></div><div className="activity-list">{conversations.slice(0, 4).map((conversation, index) => <button key={conversation.id} onClick={() => navigate(`/assistant/${conversation.id}`)}><span className="bot-icon"><Bot size={18} /></span><span className="activity-main"><strong>{conversation.title}</strong><small>{folders.find((f) => f.id === conversation.folderId)?.client}</small></span><span className="activity-time">{index === 0 ? '09:46' : conversation.updatedAt.split(',')[0]}</span></button>)}</div><button className="new-conversation" onClick={() => navigate('/assistant')}><Sparkles size={17} /> Nouvelle conversation</button></section>
     </div>
     <div className="privacy-strip"><ShieldCheck size={20} /><div><strong>Vérifiez la configuration avant de traiter un dossier confidentiel</strong><span>VIGILIA affiche l’adresse locale ou distante du moteur et rattache les réponses à leurs extraits sources.</span></div><button onClick={() => navigate('/infrastructure')}>Vérifier la confidentialité <ArrowRight size={15} /></button></div>
   </div>

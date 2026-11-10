@@ -43,11 +43,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [])
 
-  const notify = (message: string, tone: Toast['tone'] = 'success') => {
+  const notify = useCallback((message: string, tone: Toast['tone'] = 'success') => {
     const id = Date.now()
     setToasts((items) => [...items, { id, message, tone }])
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 3200)
-  }
+  }, [])
 
   useEffect(() => window.localStorage.setItem('vigilia.conversations', JSON.stringify(conversations)), [conversations])
   useEffect(() => window.localStorage.setItem('vigilia.documents', JSON.stringify(importedDocuments)), [importedDocuments])
@@ -55,22 +55,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => window.localStorage.setItem('vigilia.verified', JSON.stringify(verifiedCitations)), [verifiedCitations])
   useEffect(() => window.localStorage.setItem('vigilia.summaries', JSON.stringify(summaries)), [summaries])
 
+  const addConversation = useCallback((conversation: Conversation) => setConversations((items) => [conversation, ...items]), [])
+  const updateConversation = useCallback((conversation: Conversation) => setConversations((items) => items.map((item) => item.id === conversation.id ? conversation : item)), [])
+  const addImported = useCallback((document: LegalDocument) => setImportedDocuments((items) => [document, ...items]), [])
+  const addFolder = useCallback((folder: MatterFolder) => setFolders((items) => [folder, ...items]), [])
+  const verifyCitation = useCallback((id: string) => setVerifiedCitations((items) => items.includes(id) ? items : [...items, id]), [])
+  const saveSummary = useCallback((summary: SummaryVersion) => setSummaries((items) => [summary, ...items]), [])
+  const demoReset = useCallback(() => {
+    setConversations(initialConversations)
+    setImportedDocuments([])
+    setFolders(initialFolders)
+    setVerifiedCitations([])
+    setSummaries([])
+    notify('Démonstration réinitialisée')
+  }, [notify])
+
   const value = useMemo<AppState>(() => ({
     conversations,
-    addConversation: (conversation) => setConversations((items) => [conversation, ...items]),
-    updateConversation: (conversation) => setConversations((items) => items.map((item) => item.id === conversation.id ? conversation : item)),
+    addConversation,
+    updateConversation,
     importedDocuments,
-    addImported: (document) => setImportedDocuments((items) => [document, ...items]),
+    addImported,
     folders,
-    addFolder: (folder) => setFolders((items) => [folder, ...items]),
+    addFolder,
     verifiedCitations,
-    verifyCitation: (id) => setVerifiedCitations((items) => items.includes(id) ? items : [...items, id]),
+    verifyCitation,
     summaries,
-    saveSummary: (summary) => setSummaries((items) => [summary, ...items]),
+    saveSummary,
     toasts,
     notify,
-    demoReset: () => { setConversations(initialConversations); setImportedDocuments([]); setFolders(initialFolders); setVerifiedCitations([]); setSummaries([]); notify('Démonstration réinitialisée') },
-  }), [conversations, importedDocuments, folders, verifiedCitations, summaries, toasts])
+    demoReset,
+  }), [conversations, addConversation, updateConversation, importedDocuments, addImported, folders, addFolder, verifiedCitations, verifyCitation, summaries, saveSummary, toasts, notify, demoReset])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
